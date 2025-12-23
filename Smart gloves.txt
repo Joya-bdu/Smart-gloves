@@ -1,0 +1,125 @@
+#include <SoftwareSerial.h>
+#include <TinyGPS++.h>
+
+// Pins
+#define trigPin 13
+#define echoPin 12
+#define led 11
+#define buttonPin 7
+#define flamePin 8
+#define buzzerPin 6
+
+// Serial ports
+SoftwareSerial gpsSerial(4, 3); // GPS
+SoftwareSerial btSerial(2, 5);  // Bluetooth
+
+TinyGPSPlus gps;
+
+void setup() {
+  Serial.begin(9600);
+  gpsSerial.begin(9600);
+  btSerial.begin(9600);
+
+  pinMode(trigPin, OUTPUT);
+  pinMode(echoPin, INPUT);
+  pinMode(led, OUTPUT);
+  pinMode(buttonPin, INPUT_PULLUP);
+  pinMode(flamePin, INPUT);
+  pinMode(buzzerPin, OUTPUT);
+
+  Serial.println("System Initialized: Ultrasonic + GPS + Flame + Emergency Button");
+  btSerial.println("System Initialized: Ultrasonic + GPS + Flame + Emergency Button");
+}
+
+void loop() {
+  long duration;
+  float distance;
+
+  // ================================
+  // 1. Emergency Button
+  // ================================
+  if (digitalRead(buttonPin) == LOW) {
+    Serial.println("🚨 Emergency! I am in danger.");
+    btSerial.println("🚨 Emergency! I am in danger.");
+    digitalWrite(buzzerPin, HIGH);
+    delay(500);
+    digitalWrite(buzzerPin, LOW);
+    delay(1000);
+  }
+
+  // ================================
+  // 2. Flame Sensor Detection
+  // ================================
+  if (digitalRead(flamePin) == LOW) {  // LOW means flame detected (most modules)
+    Serial.println("🔥 Flame Detected!");
+    btSerial.println("🔥 Flame Detected!");
+    digitalWrite(buzzerPin, HIGH);
+    delay(700);
+    digitalWrite(buzzerPin, LOW);
+  }
+
+  // ================================
+  // 3. Ultrasonic Distance Measuring
+  // ================================
+  digitalWrite(trigPin, LOW);
+  delayMicroseconds(2);
+  digitalWrite(trigPin, HIGH);
+  delayMicroseconds(10);
+  digitalWrite(trigPin, LOW);
+
+  duration = pulseIn(echoPin, HIGH, 30000);
+  distance = (duration / 2.0) / 29.1;
+
+  // ================================
+  // 4. Read GPS Data
+  // ================================
+  while (gpsSerial.available()) {
+    gps.encode(gpsSerial.read());
+  }
+
+  // ================================
+  // 5. Distance Output
+  // ================================
+  if (distance > 0) {
+    Serial.print("Distance: ");
+    Serial.print(distance);
+    Serial.println(" cm");
+
+    btSerial.print("Distance: ");
+    btSerial.print(distance);
+    btSerial.println(" cm");
+  }
+
+  // ================================
+  // 6. Obstacle Detection Logic
+  // ================================
+  if (distance > 0 && distance < 10) {
+    digitalWrite(led, HIGH);
+    digitalWrite(buzzerPin, HIGH);
+
+    Serial.println("⚠️ Warning! Object too close.");
+    btSerial.println("⚠️ Warning! Object too close.");
+
+    if (gps.location.isValid()) {
+      Serial.print("Location: ");
+      Serial.print(gps.location.lat(), 6);
+      Serial.print(", ");
+      Serial.println(gps.location.lng(), 6);
+
+      btSerial.print("Location: ");
+      btSerial.print(gps.location.lat(), 6);
+      btSerial.print(", ");
+      btSerial.println(gps.location.lng(), 6);
+    }
+
+    delay(500);
+    digitalWrite(buzzerPin, LOW);
+
+  } else if (distance >= 10 && distance < 500) {
+    digitalWrite(led, LOW);
+    Serial.println("✅ Safe distance.");
+    btSerial.println("✅ Safe distance.");
+  }
+
+  delay(1000);
+}
